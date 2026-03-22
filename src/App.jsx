@@ -33,6 +33,7 @@ function App() {
   const [isChronicleOpen, setIsChronicleOpen] = useState(false);
   const [chronicleSlotId, setChronicleSlotId] = useState('0');
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [capturedImage, setCapturedImage] = useState(null);
 
   // --- ENDGAME STATE ---
   const [isEndgameModalOpen, setIsEndgameModalOpen] = useState(false);
@@ -79,51 +80,68 @@ function App() {
     const element = document.querySelector('.game-card');
     if (!element) return;
 
-    // 1. Grab all the images on the main board
-    const images = element.querySelectorAll('img');
-    const originalSrcs = [];
+    let generatedBlob = null; // The rescue net for the image data
 
     try {
-      // 2. Route external book covers through the CORS proxy (ignoring local runes)
-      const loadPromises = Array.from(images).map((img) => {
-        const isExternal = img.src.includes('http') && !img.src.includes(window.location.origin);
+      const clipboardItem = new ClipboardItem({
+        'image/png': new Promise(async (resolve, reject) => {
+          const images = element.querySelectorAll('img');
+          const originalSrcs = [];
 
-        if (isExternal && !img.src.includes('wsrv.nl')) {
-          originalSrcs.push({ img, src: img.src });
-          return new Promise((resolve) => {
-            img.onload = resolve;
-            img.onerror = resolve;
-            img.src = `https://wsrv.nl/?url=${encodeURIComponent(img.src)}`;
-          });
-        }
-        return Promise.resolve();
+          try {
+            const loadPromises = Array.from(images).map((img) => {
+              const isExternal = img.src.includes('http') && !img.src.includes(window.location.origin);
+              
+              if (isExternal && !img.src.includes('wsrv.nl')) {
+                originalSrcs.push({ img, src: img.src });
+                return new Promise((res) => {
+                  img.onload = res;
+                  img.onerror = res;
+                  img.src = `https://wsrv.nl/?url=${encodeURIComponent(img.src)}`;
+                });
+              }
+              return Promise.resolve();
+            });
+
+            await Promise.all(loadPromises);
+
+            const canvas = await html2canvas(element, {
+              useCORS: true,
+              allowTaint: false,
+              backgroundColor: null,
+              scale: 2,
+            });
+
+            originalSrcs.forEach(({ img, src }) => { img.src = src; });
+
+            canvas.toBlob((blob) => {
+              if (blob) {
+                generatedBlob = blob; // Save the image to our rescue net
+                resolve(blob);
+              } else {
+                reject(new Error("Canvas to Blob failed"));
+              }
+            }, 'image/png');
+
+          } catch (innerErr) {
+            originalSrcs.forEach(({ img, src }) => { img.src = src; });
+            reject(innerErr);
+          }
+        })
       });
 
-      await Promise.all(loadPromises);
-
-      // 3. Capture the board with CORS enabled
-      const canvas = await html2canvas(element, {
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: null, // Keeps transparency if you have any
-        scale: 2, // High resolution
-      });
-
-      // 4. Instantly revert the image sources back to normal for the live DOM
-      originalSrcs.forEach(({ img, src }) => { img.src = src; });
-
-      // 5. Copy to clipboard
-      canvas.toBlob(async (blob) => {
-        if (!blob) return;
-        const item = new ClipboardItem({ 'image/png': blob });
-        await navigator.clipboard.write([item]);
-        alert("The Saga image has been copied to your clipboard!");
-      }, 'image/png');
+      await navigator.clipboard.write([clipboardItem]);
+      alert("The Saga image has been copied to your clipboard!");
 
     } catch (err) {
-      console.error("Capture Error:", err);
-      originalSrcs.forEach(({ img, src }) => { img.src = src; });
-      alert("CORS security blocked the capture. Try a manual screenshot!");
+      console.error("Clipboard blocked:", err);
+      // THE SAFARI ESCAPE HATCH
+      if (generatedBlob) {
+        // If the clipboard fails but we successfully made the image, show it!
+        setCapturedImage(URL.createObjectURL(generatedBlob));
+      } else {
+        alert("Capture failed. Please try taking a manual screenshot.");
+      }
     }
   };
 
@@ -522,6 +540,41 @@ function App() {
           setEndgameStep('summary'); 
         }}
       />
+      {/* SAFARI FALLBACK MODAL */}
+      {capturedImage && (
+        <div className="modal-overlay" onClick={() => setCapturedImage(null)}>
+          <div 
+            className="modal-content" 
+            onClick={(e) => e.stopPropagation()} 
+            style={{ textAlign: 'center', width: '95%', maxWidth: '650px' }}
+          >
+            <h3 className="ritual-title" style={{ fontSize: '1.5rem', marginBottom: '15px' }}>
+              Destiny Scribed
+            </h3>
+            
+            <img 
+              src={capturedImage} 
+              alt="Captured Board" 
+              style={{ width: '100%', borderRadius: '4px', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }} 
+            />
+            
+            <p className="ritual-subtitle" style={{ opacity: 1, marginTop: '20px', fontSize: '1rem' }}>
+              Long-press the image above to Copy or Save to Photos.
+            </p>
+            
+            <button 
+              onClick={() => setCapturedImage(null)} 
+              style={{
+                marginTop: '20px', background: 'none', border: '1px solid rgba(75, 87, 109, 0.5)',
+                color: '#e7dfd5', padding: '10px 20px', fontFamily: 'Norse', cursor: 'pointer'
+              }}
+            >
+              Return to Saga
+            </button>
+          </div>
+        </div>
+      )}
+
       {isGuideOpen && (
         <div className="guide-overlay" onClick={() => setIsGuideOpen(false)}>
           <div className="guide-content">
