@@ -16,15 +16,13 @@ import wolfGlyph from '../assets/wolf_glyph.webp';
 import stagGlyph from '../assets/stag_glyph.webp';
 import orcaGlyph from '../assets/orca_glyph.webp';
 import ravenGlyph from '../assets/raven_glyph.webp';
+import React, { useState } from 'react';
 
 export default function EndgameModal({ 
-  isOpen, 
-  step, 
-  fateData, 
-  computedResult, 
-  onCalculate, 
-  onClose 
+  isOpen, step, fateData, computedResult, onCalculate, onClose 
 }) {
+  const [capturedImage, setCapturedImage] = useState(null); // <-- ADD THIS
+
   if (!isOpen) return null;
 
   const topAnimals = [
@@ -41,21 +39,20 @@ export default function EndgameModal({
     { title: "OMEN\nBEARER", key: 'raven', img: ravenGlyph }
   ];
 
-  // --- THE BULLETPROOF COPY FUNCTION ---
-  // --- THE BULLETPROOF COPY FUNCTION (SAFARI ADAPTED) ---
+  // --- THE BULLETPROOF COPY FUNCTION (SAFARI ADAPTED + ESCAPE HATCH) ---
   const copyResultImage = async () => {
     if (!computedResult) return;
 
+    let generatedBlob = null; // The rescue net
+
     try {
-      // THE SAFARI TRICK: Hand the clipboard an "IOU" Promise immediately
       const clipboardItem = new ClipboardItem({
         'image/png': new Promise((resolve, reject) => {
           const imgSrc = getResultImagePath(computedResult.winner.id, computedResult.variant);
           const img = new Image();
-          img.crossOrigin = "anonymous"; // Prevents CORS taint
+          img.crossOrigin = "anonymous"; 
 
           img.onload = () => {
-            // Draw to a canvas to convert it into a universally accepted PNG format
             const canvas = document.createElement('canvas');
             canvas.width = img.width;
             canvas.height = img.height;
@@ -64,6 +61,7 @@ export default function EndgameModal({
 
             canvas.toBlob((blob) => {
               if (blob) {
+                generatedBlob = blob; // Save the image to our rescue net
                 resolve(blob);
               } else {
                 reject(new Error("Canvas to Blob failed"));
@@ -72,18 +70,21 @@ export default function EndgameModal({
           };
 
           img.onerror = () => reject(new Error("Image failed to load"));
-          
-          img.src = imgSrc; // This actually triggers the load
+          img.src = imgSrc; 
         })
       });
 
-      // Execute the write command using the Promise-based item
       await navigator.clipboard.write([clipboardItem]);
       alert("The Chronicle has been copied to your clipboard!");
 
     } catch (err) {
       console.error("Clipboard error:", err);
-      alert("Apple security blocked the capture. Try a manual screenshot or long-press the image to save!");
+      // THE SAFARI ESCAPE HATCH
+      if (generatedBlob) {
+        setCapturedImage(URL.createObjectURL(generatedBlob));
+      } else {
+        alert("Apple security blocked the capture. Try a manual screenshot or long-press the image to save!");
+      }
     }
   };
 
@@ -200,7 +201,41 @@ export default function EndgameModal({
           
         </div>
       )}
-
+      {/* SAFARI FALLBACK MODAL */}
+      {capturedImage && (
+        <div className="modal-overlay" onClick={() => setCapturedImage(null)} style={{ zIndex: 300000 }}>
+          <div 
+            className="modal-content" 
+            onClick={(e) => e.stopPropagation()} 
+            style={{ textAlign: 'center', width: '95%', maxWidth: '650px' }}
+          >
+            <h3 className="ritual-title" style={{ fontSize: '1.5rem', marginBottom: '15px' }}>
+              Chronicle Scribed
+            </h3>
+            
+            <img 
+              src={capturedImage} 
+              alt="Captured Result" 
+              style={{ width: '100%', borderRadius: '4px', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }} 
+            />
+            
+            <p className="ritual-subtitle" style={{ opacity: 1, marginTop: '20px', fontSize: '1rem' }}>
+              Long-press the image above to Copy or Save to Photos.
+            </p>
+            
+            <button 
+              onClick={() => setCapturedImage(null)} 
+              style={{
+                marginTop: '20px', background: 'none', border: '1px solid rgba(75, 87, 109, 0.5)',
+                color: '#e7dfd5', padding: '10px 20px', fontFamily: 'Norse', cursor: 'pointer'
+              }}
+            >
+              Return to Saga
+            </button>
+          </div>
+        </div>
+      )}
+      
     </div>
   );
 }

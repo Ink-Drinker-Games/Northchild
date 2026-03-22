@@ -8,7 +8,8 @@ export default function BroadcastModal({ slotId, selections, slotData, animalDat
   const [isRightDropdownOpen, setIsRightDropdownOpen] = useState(false);
   
   // Track which book slot (1, 2, 3, or 4) the user wants to feature
-  const [activeBookSlot, setActiveBookSlot] = useState(1); 
+  const [activeBookSlot, setActiveBookSlot] = useState(1);
+  const [capturedImage, setCapturedImage] = useState(null); 
   
   const chronicleRef = useRef(null); 
 
@@ -29,6 +30,8 @@ export default function BroadcastModal({ slotId, selections, slotData, animalDat
 
   const handleCapture = async () => {
     if (!chronicleRef.current) return;
+
+    let generatedBlob = null; // The rescue net
 
     try {
       // THE SAFARI TRICK: Hand the clipboard an "IOU" Promise immediately
@@ -66,6 +69,7 @@ export default function BroadcastModal({ slotId, selections, slotData, animalDat
 
             canvas.toBlob((blob) => {
               if (blob) {
+                generatedBlob = blob; // Save the image to our rescue net
                 resolve(blob);
               } else {
                 reject(new Error("Canvas to Blob failed"));
@@ -85,7 +89,12 @@ export default function BroadcastModal({ slotId, selections, slotData, animalDat
 
     } catch (err) {
       console.error("Capture Error:", err);
-      alert("Apple security blocked the capture. Try a manual screenshot or long-press the final image to save!");
+      // THE SAFARI ESCAPE HATCH
+      if (generatedBlob) {
+        setCapturedImage(URL.createObjectURL(generatedBlob));
+      } else {
+        alert("Apple security blocked the capture. Try a manual screenshot or long-press the final image to save!");
+      }
     }
   };
 
