@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { getResultImagePath } from '../northchildMechanics';
 
 // --- THE BACKGROUND IMPORT ---
@@ -16,7 +16,7 @@ import wolfGlyph from '../assets/wolf_glyph.webp';
 import stagGlyph from '../assets/stag_glyph.webp';
 import orcaGlyph from '../assets/orca_glyph.webp';
 import ravenGlyph from '../assets/raven_glyph.webp';
-import React, { useState } from 'react';
+
 
 export default function EndgameModal({ 
   isOpen, step, fateData, computedResult, onCalculate, onClose 
@@ -235,7 +235,7 @@ export default function EndgameModal({
           </div>
         </div>
       )}
-      
+
     </div>
   );
 }
